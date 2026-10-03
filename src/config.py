@@ -34,19 +34,57 @@ def load_config(base_dir: Path | None = None) -> LabConfig:
     3. Create `state/` if it does not exist.
     4. Return a populated LabConfig instance.
     """
+    import os
+    try:
+        from dotenv import load_dotenv
+        root = (base_dir or Path(__file__).resolve().parent.parent).resolve()
+        load_dotenv(root / ".env")
+    except ImportError:
+        root = (base_dir or Path(__file__).resolve().parent.parent).resolve()
 
-    root = (base_dir or Path(__file__).resolve().parent.parent).resolve()
+    state_dir = root / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "profiles").mkdir(parents=True, exist_ok=True)
 
-    # TODO: read env vars for one of the supported providers.
-    # Example knobs:
-    # - LLM_PROVIDER / LLM_MODEL
-    # - OPENAI_API_KEY
-    # - GEMINI_API_KEY
-    # - ANTHROPIC_API_KEY
-    # - OLLAMA_BASE_URL
-    # - OPENROUTER_API_KEY
-    # - CUSTOM_BASE_URL / CUSTOM_API_KEY
-    # TODO: create `root / "state"`.
-    # TODO: choose sensible defaults for compact memory.
+    provider = os.getenv("LLM_PROVIDER", "openai")
+    model_name = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+        or os.getenv("CUSTOM_API_KEY")
+    )
+    base_url = os.getenv("CUSTOM_BASE_URL") or os.getenv("OLLAMA_BASE_URL")
 
-    raise NotImplementedError("Students should implement load_config().")
+    model_config = ProviderConfig(
+        provider=provider,
+        model_name=model_name,
+        temperature=float(os.getenv("LLM_TEMPERATURE", "0.0")),
+        api_key=api_key,
+        base_url=base_url,
+    )
+
+    judge_provider = os.getenv("JUDGE_PROVIDER", provider)
+    judge_model_name = os.getenv("JUDGE_MODEL", model_name)
+    judge_config = ProviderConfig(
+        provider=judge_provider,
+        model_name=judge_model_name,
+        temperature=0.0,
+        api_key=api_key,
+        base_url=base_url,
+    )
+
+    compact_threshold = int(os.getenv("COMPACT_THRESHOLD_TOKENS", "350"))
+    compact_keep = int(os.getenv("COMPACT_KEEP_MESSAGES", "2"))
+
+    return LabConfig(
+        base_dir=root,
+        data_dir=root / "data",
+        state_dir=state_dir,
+        compact_threshold_tokens=compact_threshold,
+        compact_keep_messages=compact_keep,
+        model=model_config,
+        judge_model=judge_config,
+    )
+
